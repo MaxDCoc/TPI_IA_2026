@@ -1,0 +1,17 @@
+# Entorno virtual y cachés de Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Datos crudos descargados (en data/uci_heart/ solo se versionan los archivos procesados)
+data/raw/
+*.zip
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -10,6 +10,7 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 - [x] Tests con Play Tennis, el ejemplo de Liu, Iris y propiedades.
 - [x] Capa de datos agnóstica al dataset: cargador, auditoría y registro de decisiones (D-01 a D-07). Probada sobre Iris.
 - [x] Random Forest, métricas y corredor de experimentos. Probados sobre Iris.
+- [x] Experimentos: barrido de un parámetro, validación cruzada anidada y robustez a faltantes. Probados sobre Iris.
 - [ ] Heart Disease: verificar el cargador y los escenarios, una vez confirmado todo con Iris.
 - [ ] Sitio web embebido en el notebook de Colab.
 - [ ] Poda, notebook final e informe.
@@ -19,7 +20,7 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 ```
 src/tp_ia/c45/     el árbol: criteria.py (entropía, ganancia) · splits.py (mejor corte) · tree.py
 src/tp_ia/data/    cargador agnóstico, auditoría, registro de decisiones, Iris y fixtures de juguete (Play Tennis, Liu)
-src/tp_ia/eval/    particiones, métricas, Random Forest (scikit-learn) y corredor de experimentos
+src/tp_ia/eval/    particiones, métricas, Random Forest (scikit-learn), corredor y experimentos
 tests/             pytest
 data/iris/         iris.csv: dataset de desarrollo y validación (ver DATOS.md)
 data/uci_heart/    archivos procesados de UCI (ver DATOS.md)
@@ -83,6 +84,31 @@ print(ds.log.to_markdown())                                      # decisiones D-
 ```
 
 `load_dataset(ruta, DatasetSpec(...))` hace lo mismo con cualquier CSV: detecta separador, decimal, codificación y marcadores de faltante (`?`, `NA`, vacío).
+
+### Experimentos
+
+Tres experimentos listos, todos con las mismas particiones y el mismo formato de tabla (tardan unos 45 segundos en total sobre Iris):
+
+```python
+from tp_ia.eval import (make_splits, missing_robustness, nested_cv, parameter_sweep, robustness_table,
+                        selection_frequency)
+
+splits = make_splits(ds.y, n_splits=5, n_repeats=2, seed=0)
+
+# 1. Un parámetro a la vez: rendimiento en test, en train y la brecha entre ambos (sobreajuste)
+print(parameter_sweep(ds, "dt", "max_depth", [1, 2, 3, None], splits).round(3))
+
+# 2. Elegir parámetros sin hacer trampa: dentro de cada partición, la CV interna ve SOLO el train
+nested = nested_cv(ds, "dt", {"max_depth": [2, 3, None], "min_samples_leaf": [2, 5]}, splits)
+print(nested[["chosen", "inner_score", "test_macro_f1"]].round(3))
+print(selection_frequency(nested))          # si la elección cambia mucho, es inestable
+
+# 3. Robustez: se borra al azar una fracción de los valores (en train y en test) y se mide cuánto cae cada modelo
+models = {"DT": ("dt", {}), "RF": ("rf", {"n_estimators": 100, "random_state": 0})}
+print(robustness_table(missing_robustness(ds, models, [0, 0.2, 0.4], splits, seeds=(0, 1, 2))).round(3))
+```
+
+En la selección anidada, ante un empate gana la primera combinación de la grilla: conviene poner primero la más simple.
 
 ## Datos
 

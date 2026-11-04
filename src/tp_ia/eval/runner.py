@@ -42,7 +42,39 @@ def _align_proba(proba, model_classes, classes) -> np.ndarray:
     return out
 
 
-def run_experiment(dataset, models: dict, splits) -> pd.DataFrame:
+def register_evaluation(dataset, splits, models: dict):
+    """Anota en el registro de decisiones del dataset cómo se evalúa (D-07).
+
+    Se puede llamar las veces que haga falta: reemplaza la anotación anterior en vez de duplicarla.
+    """
+    if not splits:
+        return None
+    repeats = len({s.repeat for s in splits})
+    folds = len(splits) // repeats
+    train, test = [len(s.train) for s in splits], [len(s.test) for s in splits]
+    if folds > 1:
+        chosen = f"validación cruzada estratificada de {folds} pliegues, repetida {repeats} veces ({len(splits)} particiones)"
+    else:
+        chosen = f"partición train/test estratificada, repetida {repeats} veces ({len(splits)} particiones)"
+    return dataset.log.replace(
+        "D-07", "Esquema de evaluación", chosen,
+        rationale="Con pocos datos una sola partición es ruido: un error de más mueve la accuracy varios puntos. "
+                  "Se estratifica para conservar la proporción de clases y los modelos se evalúan sobre las MISMAS "
+                  "particiones, así la comparación es sobre los mismos datos. Se informan accuracy, balanced accuracy y "
+                  "macro-F1 (con clases desbalanceadas la accuracy engaña) y train contra test, para ver el sobreajuste. "
+                  "Las particiones de una validación cruzada se solapan: el p-valor de Wilcoxon es descriptivo, no "
+                  "una prueba formal.",
+        alternatives=["una sola partición train/test", "validación cruzada sin repetir"],
+        evidence={"particiones": len(splits), "repeticiones": repeats, "pliegues por repetición": folds,
+                  "casos de train": f"{min(train)}-{max(train)}", "casos de test": f"{min(test)}-{max(test)}",
+                  "modelos": {name: f"{kind} {params or '(parámetros por defecto)'}"
+                              for name, (kind, params) in models.items()}})
+
+
+def run_experiment(dataset, models: dict, splits, register_decision: bool = True) -> pd.DataFrame:
+    """Entrena cada modelo en cada partición. Con register_decision anota D-07 en dataset.log."""
+    if register_decision:
+        register_evaluation(dataset, splits, models)
     X, y = dataset.X, dataset.y.to_numpy()
     classes = list(dataset.classes)
     labels = np.asarray(classes)

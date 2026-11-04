@@ -221,6 +221,15 @@ def build_dataset(df: pd.DataFrame, spec: DatasetSpec, scenario=None, missing_po
 
     classes = sorted(y.unique().tolist())
     report = audit(X, y, feature_types)
+    log.add("D-06", "Valores extremos", "se conservan",
+            rationale="Un extremo plausible es una medición real: borrarlo o recortarlo sin criterio del dominio es "
+                      "inventar datos. Los árboles dividen por umbrales, así que un valor muy grande cae en la misma "
+                      "rama que uno grande y no distorsiona nada. Lo imposible (por ejemplo un 0 donde no puede haberlo) "
+                      "no es un extremo sino un faltante, y se trata en D-03.",
+            alternatives=["eliminar las filas con extremos", "recortarlos al límite (winsorización)"],
+            evidence={"regla": f"fuera de [Q1 - {report['outlier_factor']}·IQR, Q3 + {report['outlier_factor']}·IQR] (Tukey)",
+                      "valores extremos": sum(i["count"] for i in report["outliers"].values()),
+                      "por columna": {c: i["count"] for c, i in report["outliers"].items()}})
     log.add("D-02", "Variable objetivo", f"escenario «{scenario}»" if scenario else "columna original",
             rationale=scenario_obj.description if scenario_obj else "",
             alternatives=[s for s in (sorted(spec.scenarios) if spec.scenarios else []) if s != scenario],

@@ -4,8 +4,9 @@ Auditoría de calidad de un dataset ya cargado: faltantes, duplicados, clases, c
 GUÍA DE LECTURA
 ---------------
 audit() devuelve un diccionario con los números y una lista de `warnings` en castellano. Es lo que
-muestra la pantalla "Datos" de la interfaz y lo que respalda las decisiones D-03 (faltantes) y D-04
-(duplicados). Los umbrales son parámetros: no hay números mágicos escondidos.
+muestra la pantalla "Datos" de la interfaz y lo que respalda las decisiones D-03 (faltantes), D-04
+(duplicados) y D-06 (valores extremos, por la regla de Tukey: solo se informan, no se tocan). Los
+umbrales son parámetros: no hay números mágicos escondidos.
 """
 from __future__ import annotations
 
@@ -16,8 +17,32 @@ def _py(value):
     return value.item() if hasattr(value, "item") else value
 
 
+def _tukey_outliers(X: pd.DataFrame, feature_types: dict, factor: float) -> dict:
+    """Valores fuera de [Q1 - factor*IQR, Q3 + factor*IQR] por columna numérica (regla de Tukey).
+
+    Solo informa: no es un error ni se descarta nada (decisión D-06). Si Q1 == Q3 no hay dispersión
+    central y la regla marcaría como 'extremo' a cualquier valor distinto, así que esa columna se saltea.
+    """
+    found = {}
+    for column in X.columns:
+        if feature_types.get(column) != "numeric":
+            continue
+        values = pd.to_numeric(X[column], errors="coerce").dropna()
+        if len(values) < 4:
+            continue
+        q1, q3 = values.quantile(0.25), values.quantile(0.75)
+        spread = q3 - q1
+        if spread <= 0:
+            continue
+        low, high = q1 - factor * spread, q3 + factor * spread
+        count = int(((values < low) | (values > high)).sum())
+        if count:
+            found[str(column)] = {"count": count, "low": round(float(low), 3), "high": round(float(high), 3)}
+    return found
+
+
 def audit(X: pd.DataFrame, y: pd.Series, feature_types: dict, small_class: int = 15,
-          high_missing: float = 0.30, imbalance_ratio: float = 5.0) -> dict:
+          high_missing: float = 0.30, imbalance_ratio: float = 5.0, outlier_factor: float = 1.5) -> dict:
     n = len(X)
     counts = y.value_counts().sort_index()
     class_counts = {_py(k): int(v) for k, v in counts.items()}
@@ -76,4 +101,5 @@ def audit(X: pd.DataFrame, y: pd.Series, feature_types: dict, small_class: int =
         "missing": missing, "rows_with_missing": rows_with_missing, "duplicates": duplicates,
         "constant_columns": constant, "id_like_columns": id_like,
         "numeric_summary": numeric_summary, "cardinality": cardinality, "warnings": warnings,
+        "outliers": _tukey_outliers(X, feature_types, outlier_factor), "outlier_factor": outlier_factor,
     }

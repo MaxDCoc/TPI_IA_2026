@@ -1,4 +1,6 @@
 """Tests de la capa de datos: Iris (CSV real del repo) y archivos 'sucios' sintéticos."""
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -49,7 +51,7 @@ def test_iris_loads_from_csv_with_expected_shape_and_types():
 
 def test_iris_records_every_decision_with_evidence():
     ds = load_iris_dataset()
-    assert {"D-01", "D-02", "D-03", "D-04", "D-05"} <= set(ds.log.ids())
+    assert {"D-01", "D-02", "D-03", "D-04", "D-05", "D-06"} <= set(ds.log.ids())
     markdown = ds.log.to_markdown()
     assert "D-04" in markdown and "duplicadas = 1" in markdown
     assert len(ds.log.to_records()) == len(ds.log)
@@ -133,3 +135,47 @@ def test_decision_log_markdown_and_records():
     markdown = log.to_markdown()
     assert "D-09 · Prueba" in markdown and "n = 3" in markdown and "B" in markdown
     assert log.to_records()[0]["id"] == "D-09" and len(log) == 1
+
+
+def test_decision_log_is_listed_in_numeric_order_and_replace_does_not_duplicate():
+    log = DecisionLog()
+    for decision_id in ("D-05", "D-01", "D-03", "D-02"):
+        log.add(decision_id, "t", "c")
+    log.add("D-03", "segunda de las faltantes", "c")          # un mismo id puede registrarse dos veces
+    assert re.findall(r"## (D-\d\d)", log.to_markdown()) == ["D-01", "D-02", "D-03", "D-03", "D-05"]
+    assert [r["title"] for r in log.to_records() if r["id"] == "D-03"] == ["t", "segunda de las faltantes"]
+    log.replace("D-03", "única", "c")
+    assert log.ids().count("D-03") == 1 and len(log) == 4
+
+
+def test_the_iris_decision_report_reads_in_order():
+    headings = re.findall(r"## (D-\d\d)", load_iris_dataset().log.to_markdown())
+    assert headings == sorted(headings) and headings[0] == "D-01" and "D-06" in headings
+
+
+# --------------------------------------------------------------------- D-06: valores extremos
+def test_outliers_follow_tukey_rule_and_skip_columns_without_spread():
+    X = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 100],       # Q1=3.25, Q3=7.75 -> límites -3.5 y 14.5
+                      "sin_dispersion": [0] * 9 + [5],             # Q1 == Q3: la regla no se puede aplicar
+                      "k": range(1, 11), "texto": list("abcdefghij")})
+    y = pd.Series(list("xy") * 5)
+    types = {"a": "numeric", "sin_dispersion": "numeric", "k": "numeric", "texto": "nominal"}
+    assert audit(X, y, types)["outliers"] == {"a": {"count": 1, "low": -3.5, "high": 14.5}}
+    assert audit(X, y, types, outlier_factor=100)["outliers"] == {}
+
+
+def test_iris_outliers_match_an_independent_numpy_computation_and_are_kept():
+    ds = load_iris_dataset()
+    expected = {}
+    for column in ds.X.columns:
+        values = ds.X[column].to_numpy()
+        q1, q3 = np.percentile(values, [25, 75])
+        count = int(((values < q1 - 1.5 * (q3 - q1)) | (values > q3 + 1.5 * (q3 - q1))).sum())
+        if count:
+            expected[column] = count
+    assert expected == {"sepal_width": 4}                          # 2.0, 4.1, 4.2 y 4.4
+    assert {c: i["count"] for c, i in ds.report["outliers"].items()} == expected
+    d06 = next(d for d in ds.log if d.id == "D-06")
+    assert d06.chosen == "se conservan" and d06.evidence["valores extremos"] == 4
+    assert len(ds.X) == 150 and ds.X["sepal_width"].max() == 4.4   # no se borró ni se recortó nada
+    assert not any("extremo" in w for w in ds.report["warnings"])  # informa, no alarma

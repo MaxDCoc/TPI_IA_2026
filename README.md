@@ -1,6 +1,6 @@
 # TPI_IA_2026
 
-Trabajo práctico de Inteligencia Artificial 2026 (5.º nivel ISI): **árbol de decisión C4.5 implementado desde cero vs. Random Forest (scikit-learn)**, comparados sobre el dataset *Heart Disease* de UCI.
+Trabajo práctico de Inteligencia Artificial 2026 (5.º nivel ISI): **árbol de decisión C4.5 implementado desde cero vs. Random Forest (scikit-learn)**, comparados sobre el dataset *Heart Disease* de UCI. El pipeline se desarrolla y se valida primero sobre Iris.
 
 El árbol no usa ninguna librería de árboles de decisión: todo está en `src/tp_ia/c45/`, con comentarios guía en cada archivo.
 
@@ -8,8 +8,9 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 
 - [x] Árbol C4.5 propio: gain ratio, atributos numéricos y nominales, faltantes con reparto fraccionario, parámetros, árbol en texto y explicación de cada predicción.
 - [x] Tests con Play Tennis, el ejemplo de Liu, Iris y propiedades.
-- [ ] Capa de datos agnóstica al dataset y registro de decisiones.
-- [ ] Random Forest, métricas y corredor de experimentos.
+- [x] Capa de datos agnóstica al dataset: cargador, auditoría y registro de decisiones (D-01 a D-07). Probada sobre Iris.
+- [x] Random Forest, métricas y corredor de experimentos. Probados sobre Iris.
+- [ ] Heart Disease: verificar el cargador y los escenarios, una vez confirmado todo con Iris.
 - [ ] Sitio web embebido en el notebook de Colab.
 - [ ] Poda, notebook final e informe.
 
@@ -17,8 +18,10 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 
 ```
 src/tp_ia/c45/     el árbol: criteria.py (entropía, ganancia) · splits.py (mejor corte) · tree.py
-src/tp_ia/data/    fixtures de juguete (Play Tennis, Liu); cargadores del dataset real, próximamente
+src/tp_ia/data/    cargador agnóstico, auditoría, registro de decisiones, Iris y fixtures de juguete (Play Tennis, Liu)
+src/tp_ia/eval/    particiones, métricas, Random Forest (scikit-learn) y corredor de experimentos
 tests/             pytest
+data/iris/         iris.csv: dataset de desarrollo y validación (ver DATOS.md)
 data/uci_heart/    archivos procesados de UCI (ver DATOS.md)
 DATOS.md           fuente, cita, licencia, columnas y auditoría de los datos
 ```
@@ -62,6 +65,25 @@ Una columna numérica que en realidad es una categoría (por ejemplo un código 
 | `threshold_mode` | `"c45"` | umbral numérico: valor observado ≤ punto medio, o `"midpoint"` |
 | `numeric_gain_correction` | `False` | corrección de la versión 8 de C4.5 para atributos numéricos |
 
+## Pipeline completo sobre Iris
+
+Todo se construye y se prueba primero sobre Iris. Mismas particiones para el árbol y el Random Forest, y cada decisión sobre los datos queda registrada con su evidencia:
+
+```python
+from tp_ia.data import load_iris_dataset
+from tp_ia.eval import make_splits, paired_comparison, run_experiment, summarize
+
+ds = load_iris_dataset()
+splits = make_splits(ds.y, n_splits=5, n_repeats=4, seed=0)      # validación cruzada estratificada repetida
+models = {"DT": ("dt", {}), "RF": ("rf", {"n_estimators": 100, "random_state": 0})}
+results = run_experiment(ds, models, splits)                     # una fila por partición y modelo
+print(summarize(results).round(3))                               # media y desvío de cada métrica
+print(paired_comparison(results, "RF", "DT"))                    # diferencia sobre las mismas particiones
+print(ds.log.to_markdown())                                      # decisiones D-01 a D-07 con su evidencia
+```
+
+`load_dataset(ruta, DatasetSpec(...))` hace lo mismo con cualquier CSV: detecta separador, decimal, codificación y marcadores de faltante (`?`, `NA`, vacío).
+
 ## Datos
 
-Ver [DATOS.md](DATOS.md). Fuente: UCI Machine Learning Repository, *Heart Disease*, licencia CC BY 4.0.
+Ver [DATOS.md](DATOS.md). Iris (Fisher, 1936) se usa para desarrollar y validar el pipeline. El dataset de análisis es UCI Machine Learning Repository, *Heart Disease*, licencia CC BY 4.0, y se usa después de confirmar todo con Iris.

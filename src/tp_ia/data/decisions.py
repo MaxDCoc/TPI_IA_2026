@@ -36,6 +36,11 @@ class DecisionLog:
         self._items.append(decision)
         return decision
 
+    def replace(self, id, title, chosen, rationale="", alternatives=None, evidence=None) -> Decision:
+        """Como add(), pero descarta antes lo registrado con ese id (para decisiones que se re-registran)."""
+        self._items = [d for d in self._items if d.id != id]
+        return self.add(id, title, chosen, rationale, alternatives, evidence)
+
     def __len__(self):
         return len(self._items)
 
@@ -45,12 +50,16 @@ class DecisionLog:
     def ids(self) -> list:
         return [d.id for d in self._items]
 
+    def _ordered(self) -> list:
+        """Por número de decisión (D-01, D-02, ...); a igual id se conserva el orden en que se registraron."""
+        return sorted(self._items, key=lambda d: d.id)
+
     def to_records(self) -> list:
-        return [asdict(d) for d in self._items]
+        return [asdict(d) for d in self._ordered()]
 
     def to_markdown(self) -> str:
         lines = ["# Registro de decisiones de datos", ""]
-        for d in self._items:
+        for d in self._ordered():
             lines += [f"## {d.id} · {d.title}", f"- **Decisión:** {d.chosen}"]
             if d.rationale:
                 lines.append(f"- **Por qué:** {d.rationale}")

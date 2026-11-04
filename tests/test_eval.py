@@ -8,7 +8,8 @@ from tp_ia.c45 import C45DecisionTree
 from tp_ia.data.fixtures import play_tennis
 from tp_ia.data.iris import load_iris_dataset
 from tp_ia.eval import (RandomForestModel, confusion, environment_info, evaluate, make_model, make_splits,
-                        max_stratified_splits, paired_comparison, run_experiment, save_results, summarize)
+                        max_stratified_splits, paired_comparison, register_evaluation, run_experiment,
+                        save_results, summarize)
 from tp_ia.eval.runner import _align_proba
 
 
@@ -175,6 +176,34 @@ def test_paired_comparison_counts_and_p_value(results):
     assert 0.0 <= comparison["p_wilcoxon"] <= 1.0
     same = paired_comparison(results, "DT", "DT")
     assert same["mean_diff"] == 0 and same["p_wilcoxon"] == 1.0
+
+
+def test_the_evaluation_decision_is_registered_once_and_reflects_the_splits():
+    ds = load_iris_dataset()                       # propio: el fixture compartido no se toca
+    splits = make_splits(ds.y, n_splits=3, n_repeats=2, seed=0)
+    run_experiment(ds, {"DT": ("dt", {})}, splits)
+    run_experiment(ds, {"DT": ("dt", {}), "RF": ("rf", {"n_estimators": 5})}, splits)   # se vuelve a correr
+    d07 = [d for d in ds.log if d.id == "D-07"]
+    assert len(d07) == 1                           # reemplaza, no duplica
+    assert "3 pliegues" in d07[0].chosen and "repetida 2 veces" in d07[0].chosen
+    sizes = lambda attr: sorted({len(getattr(s, attr)) for s in splits})
+    assert d07[0].evidence["particiones"] == 6 and d07[0].evidence["repeticiones"] == 2
+    assert d07[0].evidence["casos de test"] == f"{sizes('test')[0]}-{sizes('test')[-1]}"
+    assert d07[0].evidence["casos de train"] == f"{sizes('train')[0]}-{sizes('train')[-1]}"
+    assert set(d07[0].evidence["modelos"]) == {"DT", "RF"}          # queda la última evaluación
+
+
+def test_the_evaluation_decision_describes_a_holdout_and_can_be_skipped():
+    ds = load_iris_dataset()
+    holdout = make_splits(ds.y, scheme="holdout", n_repeats=4, test_size=0.3)
+    run_experiment(ds, {"DT": ("dt", {"max_depth": 2})}, holdout)
+    d07 = next(d for d in ds.log if d.id == "D-07")
+    assert d07.chosen.startswith("partición train/test estratificada") and d07.evidence["pliegues por repetición"] == 1
+    assert "max_depth" in d07.evidence["modelos"]["DT"]
+    other = load_iris_dataset()
+    run_experiment(other, {"DT": ("dt", {})}, holdout, register_decision=False)
+    assert "D-07" not in other.log.ids()
+    assert register_evaluation(other, [], {}) is None
 
 
 def test_align_proba_fills_absent_classes_with_zero():

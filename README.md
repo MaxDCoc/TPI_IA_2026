@@ -13,7 +13,8 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 - [x] Experimentos: barrido de un parámetro, validación cruzada anidada y robustez a faltantes. Probados sobre Iris.
 - [ ] Heart Disease: verificar el cargador y los escenarios, una vez confirmado todo con Iris.
 - [ ] Sitio web embebido en el notebook de Colab.
-- [ ] Poda, notebook final e informe.
+- [x] Poda por error pesimista de C4.5 (`prune=True`). Probada sobre Iris.
+- [ ] Notebook final e informe.
 
 ## Estructura
 
@@ -65,6 +66,29 @@ Una columna numérica que en realidad es una categoría (por ejemplo un código 
 | `use_avg_gain` | `True` | heurística de C4.5: solo atributos con ganancia ≥ promedio |
 | `threshold_mode` | `"c45"` | umbral numérico: valor observado ≤ punto medio, o `"midpoint"` |
 | `numeric_gain_correction` | `False` | corrección de la versión 8 de C4.5 para atributos numéricos |
+| `prune` | `False` | poda por error pesimista de C4.5 (post-poda, ver más abajo) |
+| `confidence` | `0.25` | nivel de confianza CF de la poda, en (0, 0.5]: más chico poda más |
+
+### Poda
+
+La poda reemplaza un subárbol por una hoja cuando el error estimado de la hoja no es peor que el del subárbol (más una tolerancia de 0.1). El error estimado es el límite superior de un intervalo de confianza binomial (Quinlan, 1993, cap. 4), así que castiga a las hojas chicas que memorizan ruido. No usa datos aparte: usa las distribuciones de clase del entrenamiento que ya guarda cada nodo. Los comentarios guía de [pruning.py](src/tp_ia/c45/pruning.py) explican la fórmula.
+
+```python
+from tp_ia.c45 import C45DecisionTree
+from tp_ia.data import load_iris_dataset
+
+ds = load_iris_dataset()
+full = C45DecisionTree().fit(ds.X, ds.y)
+pruned = C45DecisionTree(prune=True, confidence=0.25).fit(ds.X, ds.y)
+print(full.n_nodes_, "->", pruned.n_nodes_, "nodos")      # 13 -> 9
+print(pruned.export_text())                               # las hojas muestran (casos/errores)
+```
+
+- **Decisión:** en C4.5 la poda viene activa por defecto. Acá es opcional (`prune=False`) para poder mostrar y comparar el árbol completo y el podado.
+- **Qué está verificado:** las tasas U₂₅%(0,6) = 0.206 (confirmada en una cita del libro), 0.143, 0.750 y 0.157 del ejemplo de Quinlan, y que ese ejemplo se poda. En Iris la poda deja las mismas cinco hojas que J48 (50, 48/1, 3, 3/1 y 46/1); solo cambia qué atributo separa a setosa (empate de gain ratio).
+- **Qué no está verificado:** la constante 0.67 del caso de borde `e + 0.5 ≥ N` salió del código de C4.5 tal como lo recordamos y no pudo contrastarse con el original (solo pesa con pesos fraccionarios muy chicos).
+- **Diferencia con C4.5 completo:** no implementa *subtree raising* (reemplazar un nodo por su rama más poblada).
+- **Ojo con el valor por defecto:** con datos muy ruidosos, `confidence=0.25` puede podar poco. En un conjunto sintético con 20 % de etiquetas invertidas pasó de 105 a 77 nodos, mientras que con `confidence=0.1` quedó en 3 nodos y generalizó mucho mejor. Conviene barrer el parámetro con `parameter_sweep(ds, "dt", "confidence", [...], splits, base_params={"prune": True})`.
 
 ## Pipeline completo sobre Iris
 

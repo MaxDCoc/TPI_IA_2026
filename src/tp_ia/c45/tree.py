@@ -29,7 +29,8 @@ SALIDA
 DIFERENCIAS CON C4.5 COMPLETO (para la tabla "implementado vs omitido" del informe)
   - Implementado: gain ratio + heurística de ganancia promedio, umbrales numéricos, ramas
     multivalor, faltantes con reparto fraccionario, min_samples_leaf (-m), corrección release 8
-    (opcional). Pendiente: poda por error pesimista (HU-26), agrupación de valores nominales.
+    (opcional), poda por error pesimista (prune=True, ver pruning.py). Pendiente: agrupación de
+    valores nominales y "subtree raising".
   - Diferencia conocida: la ganancia PROMEDIO se calcula solo sobre los atributos con ganancia
     real (> min_gain); C4.5 promedia sobre todos los atributos evaluados.
   - min_samples_split=2 por defecto casi no actúa: min_samples_leaf=2 ya exige peso >= 4 para dividir.
@@ -42,13 +43,14 @@ import numpy as np
 import pandas as pd
 
 from .criteria import EPS
+from .pruning import DEFAULT_CONFIDENCE, prune_tree
 from .splits import SplitCandidate, evaluate_nominal, evaluate_numeric
 
 CRITERIA = ("gain_ratio", "gain")
 THRESHOLD_MODES = ("c45", "midpoint")
 FEATURE_KINDS = ("numeric", "nominal")
 _PARAM_NAMES = ("criterion", "max_depth", "min_samples_split", "min_samples_leaf", "min_gain",
-                "use_avg_gain", "threshold_mode", "numeric_gain_correction")
+                "use_avg_gain", "threshold_mode", "numeric_gain_correction", "prune", "confidence")
 
 
 def _tidy(value):
@@ -103,11 +105,13 @@ class C45DecisionTree:
       use_avg_gain           aplicar la heurística de ganancia promedio de C4.5.
       threshold_mode         "c45" (valor observado <= punto medio) o "midpoint" (punto medio).
       numeric_gain_correction  corrección log2(N-1)/|D| de C4.5 release 8 para atributos numéricos.
+      prune                  aplicar la poda por error pesimista de C4.5 (post-poda; ver pruning.py).
+      confidence             nivel de confianza CF de la poda, en (0, 0.5]: más chico poda más (C4.5: 0.25).
     """
 
     def __init__(self, criterion="gain_ratio", max_depth=None, min_samples_split=2,
                  min_samples_leaf=2, min_gain=0.0, use_avg_gain=True, threshold_mode="c45",
-                 numeric_gain_correction=False):
+                 numeric_gain_correction=False, prune=False, confidence=DEFAULT_CONFIDENCE):
         self.criterion = criterion
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
@@ -116,6 +120,8 @@ class C45DecisionTree:
         self.use_avg_gain = use_avg_gain
         self.threshold_mode = threshold_mode
         self.numeric_gain_correction = numeric_gain_correction
+        self.prune = prune
+        self.confidence = confidence
 
     # ------------------------------------------------------------------ parámetros
     def get_params(self, deep=True):
@@ -145,6 +151,10 @@ class C45DecisionTree:
             raise ValueError("min_samples_leaf debe ser >= 1")
         if self.min_gain < 0:
             raise ValueError("min_gain debe ser >= 0")
+        if not isinstance(self.prune, (bool, np.bool_)):
+            raise ValueError(f"prune debe ser True o False, no {self.prune!r}")
+        if not 0 < self.confidence <= 0.5:
+            raise ValueError("confidence debe estar en (0, 0.5]")
 
     # ------------------------------------------------------------------ entrenamiento
     def fit(self, X, y, feature_types=None, sample_weight=None):
@@ -181,7 +191,9 @@ class C45DecisionTree:
             raise ValueError("Todos los pesos son cero.")
         cols = self._columns(X)
         self.tree_ = self._grow(cols, y_idx, keep, weights[keep], depth=0)
-        self._compute_importances()
+        self.n_nodes_unpruned_ = self.n_nodes_
+        self.n_pruned_ = prune_tree(self.tree_, self.confidence) if self.prune else 0   # subárboles -> hoja
+        self._compute_importances()                    # después de podar: solo cuentan los cortes que quedaron
         return self
 
     def _grow(self, cols, y, idx, w, depth) -> Node:

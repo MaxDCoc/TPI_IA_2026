@@ -25,10 +25,18 @@ STATIC = Path(__file__).resolve().parent / "static"
 
 
 def enable_colab() -> bool:
-    """Activa los widgets personalizados en Colab. Devuelve False si no se está en Colab (no hace falta)."""
+    """Activa los widgets personalizados en Colab. Devuelve False si no hace falta o no se puede.
+
+    Hace falta estar dentro del kernel de un notebook de Colab, no basta con tener instalado google.colab: en Colab,
+    un subproceso (por ejemplo el pytest de la última celda) también puede importarlo, pero no tiene shell de
+    IPython y el gestor de widgets no tiene dónde engancharse.
+    """
     try:
         from google.colab import output
+        from IPython import get_ipython
     except ImportError:
+        return False
+    if get_ipython() is None:
         return False
     output.enable_custom_widget_manager()
     return True

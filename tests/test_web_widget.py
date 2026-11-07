@@ -2,7 +2,9 @@
 import json
 import shutil
 import subprocess
+import sys
 import threading
+import types
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -70,11 +72,39 @@ def test_the_widget_carries_the_javascript_and_the_styles():
     assert ".tl " in str(widget._css) and "tl-tree" in str(widget._css)
 
 
-def test_enable_colab_is_a_noop_outside_colab():
+def fake_colab(monkeypatch, shell):
+    """Simula google.colab y la shell de IPython, para que el resultado no dependa de dónde corra pytest."""
+    pytest.importorskip("anywidget")
+    pytest.importorskip("IPython")
+    calls = []
+    colab = types.ModuleType("google.colab")
+    colab.output = types.SimpleNamespace(enable_custom_widget_manager=lambda: calls.append(True))
+    monkeypatch.setitem(sys.modules, "google.colab", colab)
+    monkeypatch.setattr("IPython.get_ipython", lambda: shell)
+    return calls
+
+
+def test_enable_colab_does_nothing_when_google_colab_is_not_installed(monkeypatch):
     pytest.importorskip("anywidget")
     from tp_ia.web.widget import enable_colab
 
+    monkeypatch.setitem(sys.modules, "google.colab", None)                       # None en sys.modules hace fallar el import
     assert enable_colab() is False
+
+
+def test_enable_colab_does_nothing_in_a_colab_subprocess_without_an_ipython_shell(monkeypatch):
+    # El pytest de la última celda del notebook corre en un subproceso de Colab: google.colab se importa, pero no hay kernel.
+    calls = fake_colab(monkeypatch, shell=None)
+    from tp_ia.web.widget import enable_colab
+
+    assert enable_colab() is False and calls == []
+
+
+def test_enable_colab_turns_on_the_widget_manager_inside_a_colab_kernel(monkeypatch):
+    calls = fake_colab(monkeypatch, shell=object())
+    from tp_ia.web.widget import enable_colab
+
+    assert enable_colab() is True and calls == [True]
 
 
 # --------------------------------------------------------------------- servidor de desarrollo

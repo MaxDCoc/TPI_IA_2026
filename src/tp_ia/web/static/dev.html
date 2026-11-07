@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laboratorio de árboles de decisión (desarrollo)</title>
+  <link rel="stylesheet" href="/app.css">
+  <style>body { margin: 0; background: #EDF1F3; } #root { max-width: 1240px; margin: 0 auto; padding: 16px; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module">
+    // Hace de "model" de anywidget: manda los pedidos al servidor de desarrollo y entrega las respuestas.
+    import widget from "/app.js";
+    const listeners = {};
+    const model = {
+      get: () => undefined, set() {}, save_changes() {},
+      on(name, callback) { (listeners[name] ||= []).push(callback); },
+      off(name, callback) { listeners[name] = (listeners[name] || []).filter((f) => f !== callback); },
+      send(content) {
+        fetch("/rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(content) })
+          .then((response) => response.json())
+          .then((reply) => (listeners["msg:custom"] || []).forEach((callback) => callback(reply, [])));
+      },
+    };
+    widget.render({ model, el: document.getElementById("root") });
+  </script>
+</body>
+</html>

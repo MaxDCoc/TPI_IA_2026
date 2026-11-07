@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 
 from .criteria import EPS
+from .export import trace_case, tree_to_dict, tree_to_dot
 from .pruning import DEFAULT_CONFIDENCE, prune_tree
 from .splits import SplitCandidate, evaluate_nominal, evaluate_numeric
 
@@ -382,6 +383,18 @@ class C45DecisionTree:
         proba = self.predict_proba(frame)[0]
         return {"rules": rules, "label": self.classes_[int(np.argmax(proba))],
                 "proba": {str(c): float(p) for c, p in zip(self.classes_, proba)}}
+
+    def to_dict(self, class_names=None) -> dict:
+        """El árbol como estructura anidada con solo tipos de Python (ver export.py)."""
+        return tree_to_dict(self, class_names)
+
+    def to_dot(self, class_names=None) -> str:
+        """El árbol en formato DOT de Graphviz, con el estilo de las láminas de la cátedra."""
+        return tree_to_dot(self, class_names)
+
+    def trace(self, row) -> dict:
+        """{id de nodo: peso} con que un caso pasa por cada nodo (los ids son los de to_dict)."""
+        return trace_case(self, row)
 
     # ------------------------------------------------------------------ estructura
     def _iter_nodes(self):

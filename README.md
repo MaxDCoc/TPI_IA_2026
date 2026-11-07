@@ -12,7 +12,7 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 - [x] Random Forest, métricas y corredor de experimentos. Probados sobre Iris.
 - [x] Experimentos: barrido de un parámetro, validación cruzada anidada y robustez a faltantes. Probados sobre Iris.
 - [ ] Heart Disease: verificar el cargador y los escenarios, una vez confirmado todo con Iris.
-- [ ] Sitio web embebido en el notebook de Colab.
+- [x] Interfaz web con anywidget (datos, árbol, comparación y laboratorio de parámetros). Probada en el navegador; **falta probarla dentro de Colab**.
 - [x] Poda por error pesimista de C4.5 (`prune=True`). Probada sobre Iris.
 - [ ] Notebook final e informe.
 
@@ -22,6 +22,8 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 src/tp_ia/c45/     el árbol: criteria.py (entropía, ganancia) · splits.py (mejor corte) · tree.py
 src/tp_ia/data/    cargador agnóstico, auditoría, registro de decisiones, Iris y fixtures de juguete (Play Tennis, Liu)
 src/tp_ia/eval/    particiones, métricas, Random Forest (scikit-learn), corredor y experimentos
+src/tp_ia/web/     interfaz web: servicio en Python, widget de anywidget y la interfaz (JavaScript y CSS)
+notebooks/         laboratorio_arboles_c45.ipynb: el notebook para Colab
 tests/             pytest
 data/iris/         iris.csv: dataset de desarrollo y validación (ver DATOS.md)
 data/uci_heart/    archivos procesados de UCI (ver DATOS.md)
@@ -133,6 +135,30 @@ print(robustness_table(missing_robustness(ds, models, [0, 0.2, 0.4], splits, see
 ```
 
 En la selección anidada, ante un empate gana la primera combinación de la grilla: conviene poner primero la más simple.
+
+## Interfaz web
+
+El laboratorio es un widget de [anywidget](https://anywidget.dev/). La interfaz está escrita en JavaScript y CSS propios (`src/tp_ia/web/static/`), sin librerías externas, y todo el cálculo se hace en Python (`src/tp_ia/web/service.py`). Las dos partes se hablan con mensajes `{id, method, params}`.
+
+**En Colab:** abrí [notebooks/laboratorio_arboles_c45.ipynb](notebooks/laboratorio_arboles_c45.ipynb) (desde Colab: *Archivo → Abrir cuaderno → GitHub*) y ejecutá las celdas en orden. La primera clona el repositorio e instala `anywidget`.
+
+**En tu máquina:**
+
+```bash
+pip install -r requirements.txt
+python src/tp_ia/web/devserver.py --port 8765        # y abrir http://127.0.0.1:8765
+```
+
+O dentro de un notebook local: `from tp_ia.web.widget import show; show()`.
+
+| Pestaña | Qué hace |
+|---|---|
+| Datos | Elegir Play Tennis, Iris, Wine o Breast Cancer (o subir un CSV); ver atributos, calidad de los datos y las decisiones D-01 a D-07. |
+| Árbol | El árbol de C4.5 dibujado como flujo de casos (el ancho de cada rama es la cantidad de casos, apilada por clase). Los parámetros se mueven en vivo, incluida la poda. Se puede predecir un caso, incluso con datos faltantes, y ver por dónde pasa. |
+| Comparar | Árbol propio contra Random Forest sobre las mismas particiones: media, desvío, brecha de sobreajuste y Wilcoxon descriptivo. |
+| Laboratorio | Un parámetro por vez y robustez a datos faltantes, con bandas de ±1 desvío. |
+
+Los tests no necesitan navegador: `tests/test_web_service.py` prueba toda la lógica y `tests/test_web_widget.py` el widget, el servidor de desarrollo y la sintaxis del JavaScript.
 
 ## Datos
 

@@ -196,7 +196,7 @@ function buildDatos(ctx) {
 
   root.append(h("section", { class: "tl-section tl-decisions" },
     h("h3", { class: "tl-h3" }, "Decisiones tomadas sobre los datos"),
-    h("p", { class: "tl-muted tl-small", style: { marginBottom: "6px" } }, "Cada decisión explica qué se hizo con los datos y por qué. Están pensadas para poder citarlas en el informe."),
+    h("p", { class: "tl-muted tl-small", style: { marginBottom: "6px" } }, "Cada decisión explica qué se hizo con los datos y por qué."),
     info.decisions.map((d, i) => h("details", {},
       h("summary", {}, `${decisionLabel(i + 1)}: `, h("span", { class: "tl-muted" }, d.chosen), " ", h("span", { class: "tl-tag" }, d.id)),
       decisionBody(d)))));

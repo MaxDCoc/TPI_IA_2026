@@ -61,7 +61,7 @@ class DecisionLog:
         """El registro como texto para el informe: cada decisión numerada en palabras, con su motivo y sus datos."""
         lines = ["# Registro de decisiones sobre los datos", "",
                  "Mientras se cargan y se evalúan los datos, el programa anota cada decisión que se tomó, junto con el "
-                 "motivo y los números que la respaldan. Esta lista se puede copiar directamente en el informe.", ""]
+                 "motivo y los números que la respaldan.", ""]
         for number, d in enumerate(self._ordered(), start=1):
             lines += [f"## {decision_label(number)}: {d.chosen}", f"*Tema: {d.title} (código {d.id})*", ""]
             if d.rationale:

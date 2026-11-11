@@ -109,6 +109,7 @@ class Dataset:
     log: DecisionLog
     report: dict
     source: str = ""
+    descriptions: dict = field(default_factory=dict)   # columna -> qué mide (para la interfaz)
 
     def summary(self) -> dict:
         return {"name": self.name, "scenario": self.scenario, "n_rows": len(self.X),
@@ -145,12 +146,21 @@ def build_dataset(df: pd.DataFrame, spec: DatasetSpec, scenario=None, missing_po
     if spec.target not in df.columns:
         raise ValueError(f"La columna objetivo {spec.target!r} no está en los datos. Columnas: {list(df.columns)}")
 
-    log.add("D-01", "Fuente de los datos", f"{spec.name} ({Path(source).name or 'DataFrame'})",
-            rationale=spec.source or "—",
-            evidence={"filas": len(df), "columnas": df.shape[1], "cita": spec.citation or "—"})
+    file_name = Path(str(source)).name
+    chosen = f"usar el dataset «{spec.name}»" + (f" (archivo {file_name})" if "." in file_name else "")
+    why = [spec.purpose, f"Los datos provienen de {spec.source}." if spec.source else ""]
+    log.add("D-01", "Fuente de los datos", chosen, rationale=" ".join(p for p in why if p),
+            evidence={"filas": len(df), "columnas": df.shape[1], "referencia": spec.citation or "—"})
 
     if spec.drop:
         df = df.drop(columns=[c for c in spec.drop if c in df.columns])
+
+    # --- códigos con nombre: 4 -> "sin síntomas" (se registra en D-05) ---
+    translated = {}
+    for column, labels in spec.value_labels.items():
+        if column in df.columns:
+            df[column] = df[column].map(lambda v, labels=labels: _label(v, labels))
+            translated[column] = len(labels)
 
     # --- D-03: ceros que en realidad son faltantes ---
     for column in spec.zero_is_missing:
@@ -158,15 +168,15 @@ def build_dataset(df: pd.DataFrame, spec: DatasetSpec, scenario=None, missing_po
             zeros = df[column] == 0
             if int(zeros.sum()):
                 df[column] = df[column].astype(float).mask(zeros)
-                log.add("D-03", f"Ceros en «{column}»", "se tratan como faltantes",
-                        rationale="0 es un valor imposible para esta variable: es un faltante codificado como 0.",
-                        alternatives=["dejarlos como valor real"], evidence={"filas afectadas": int(zeros.sum())})
+                log.add("D-03", f"Ceros en «{column}»", f"tratar los ceros de «{column}» como valores faltantes",
+                        rationale="En esta variable, un 0 es un valor imposible. Por eso se interpreta como un dato faltante que se registró como 0.",
+                        alternatives=["considerarlos valores reales"], evidence={"filas afectadas": int(zeros.sum())})
 
     # --- D-02: objetivo y escenario ---
     y_raw = df[spec.target]
     has_target = y_raw.notna()
     if (~has_target).any():
-        log.add("D-02", "Filas sin objetivo", "se eliminan", rationale="No se puede entrenar ni evaluar sin la clase.",
+        log.add("D-02", "Filas sin objetivo", "eliminar las filas que no tienen la clase", rationale="No se puede entrenar ni evaluar un modelo con casos que no tienen la clase.",
                 evidence={"filas eliminadas": int((~has_target).sum())})
         df, y_raw = df[has_target], y_raw[has_target]
     scenario_obj = None
@@ -184,11 +194,13 @@ def build_dataset(df: pd.DataFrame, spec: DatasetSpec, scenario=None, missing_po
 
     # --- D-05: tipos de atributo ---
     feature_types = _resolve_types(X, set(spec.nominal))
-    log.add("D-05", "Tipos de atributo", "los declarados nominales ramifican por valor; los numéricos, por umbral",
-            rationale="Un código sin orden (por ejemplo 1/2/3/4) tratado como numérico induciría cortes sin sentido.",
-            alternatives=["inferir todo por el tipo de dato"],
-            evidence={"nominal": [c for c, t in feature_types.items() if t == "nominal"],
-                      "numérico": [c for c, t in feature_types.items() if t == "numeric"]})
+    log.add("D-05", "Tipos de atributo", "dividir los atributos nominales por valor y los numéricos por umbral",
+            rationale="Un código sin orden, como 1, 2, 3 o 4 para distintas categorías, no debe tratarse como un número. "
+                      "Si se tratara así, el árbol haría cortes sin sentido, como «categoría ≤ 2».",
+            alternatives=["deducir el tipo de cada atributo a partir del tipo de dato"],
+            evidence={"atributos nominales": [c for c, t in feature_types.items() if t == "nominal"],
+                      "atributos numéricos": [c for c, t in feature_types.items() if t == "numeric"],
+                      **({"códigos reemplazados por su significado": list(translated)} if translated else {})})
 
     # --- D-03: política de faltantes ---
     n_missing_rows = int(X.isna().any(axis=1).sum())
@@ -197,16 +209,19 @@ def build_dataset(df: pd.DataFrame, spec: DatasetSpec, scenario=None, missing_po
     if missing_policy == "drop_rows":
         keep = ~X.isna().any(axis=1)
         X, y = X[keep].reset_index(drop=True), y[keep].reset_index(drop=True)
-        log.add("D-03", "Política de faltantes", "se eliminan las filas con algún faltante",
-                rationale="Simple, pero pierde datos y puede sesgar si los faltantes no son al azar.",
-                alternatives=["conservarlas (el DT reparte fracciones de caso; el RF imputa solo con train)"],
+        log.add("D-03", "Valores faltantes", "eliminar las filas con algún valor faltante",
+                rationale="Es la opción más simple, pero se pierden datos y los resultados pueden sesgarse si los "
+                          "faltantes no aparecen al azar.",
+                alternatives=["conservarlas, ya que el árbol puede repartir esos casos entre las ramas y el bosque puede "
+                              "completar los datos usando solo el entrenamiento"],
                 evidence={"filas con faltantes": n_missing_rows, "filas eliminadas": int((~keep).sum()),
                           "faltantes por columna": per_column})
     else:
-        log.add("D-03", "Política de faltantes", "se conservan las filas con faltantes",
-                rationale="El DT los maneja como C4.5 (reparto fraccionario); el RF imputa con estadísticos "
-                          "calculados solo con el train, para no filtrar información del test.",
-                alternatives=["eliminar las filas con faltantes"],
+        log.add("D-03", "Valores faltantes", "conservar las filas con valores faltantes",
+                rationale="El árbol propio maneja los faltantes como C4.5, repartiendo el caso entre las ramas. El bosque, en "
+                          "cambio, completa los datos faltantes con valores calculados solo con el conjunto de entrenamiento, "
+                          "para no usar información de las pruebas.",
+                alternatives=["eliminar las filas con valores faltantes"],
                 evidence={"filas con faltantes": n_missing_rows, "faltantes por columna": per_column})
 
     # --- D-04: duplicados ---
@@ -215,28 +230,49 @@ def build_dataset(df: pd.DataFrame, spec: DatasetSpec, scenario=None, missing_po
     if duplicates == "drop" and n_dup:
         keep = ~both.duplicated()
         X, y = X[keep].reset_index(drop=True), y[keep].reset_index(drop=True)
-    log.add("D-04", "Filas duplicadas", "se eliminan" if duplicates == "drop" else "se conservan",
-            rationale="Una fila repetida en train y en test hace que el modelo 'memorice' y las métricas salgan infladas.",
-            alternatives=["conservarlas", "eliminarlas", "particionar agrupándolas"], evidence={"duplicadas": n_dup})
+    dropped = duplicates == "drop"
+    log.add("D-04", "Filas duplicadas", "eliminar las filas duplicadas" if dropped else "conservar las filas duplicadas",
+            rationale=("Si una fila repetida queda a la vez en el entrenamiento y en la prueba, el modelo ya «vio» ese caso "
+                       "y las métricas salen mejores de lo que realmente son."
+                       if dropped else
+                       "Pueden ser casos reales que se repiten, así que borrarlos cambiaría los datos originales. Hay que "
+                       "tener en cuenta que, si una copia queda en el entrenamiento y otra en la prueba, las métricas "
+                       "pueden salir algo mejores de lo que realmente son."),
+            alternatives=["conservarlas" if dropped else "eliminarlas", "mantener las copias juntas al dividir los datos"],
+            evidence={"filas duplicadas": n_dup})
 
     classes = sorted(y.unique().tolist())
     report = audit(X, y, feature_types)
-    log.add("D-06", "Valores extremos", "se conservan",
-            rationale="Un extremo plausible es una medición real: borrarlo o recortarlo sin criterio del dominio es "
-                      "inventar datos. Los árboles dividen por umbrales, así que un valor muy grande cae en la misma "
-                      "rama que uno grande y no distorsiona nada. Lo imposible (por ejemplo un 0 donde no puede haberlo) "
-                      "no es un extremo sino un faltante, y se trata en D-03.",
-            alternatives=["eliminar las filas con extremos", "recortarlos al límite (winsorización)"],
-            evidence={"regla": f"fuera de [Q1 - {report['outlier_factor']}·IQR, Q3 + {report['outlier_factor']}·IQR] (Tukey)",
+    log.add("D-06", "Valores extremos", "conservar los valores extremos",
+            rationale="Un valor extremo pero posible suele ser una medición real, y borrarlo o recortarlo sin conocer el "
+                      "dominio sería inventar datos. Además, los árboles dividen por umbrales, así que un valor muy "
+                      "grande cae en la misma rama que uno grande y no distorsiona el modelo. Los valores imposibles, "
+                      "como un 0 donde no puede haberlo, no se consideran extremos sino faltantes, y se tratan en la "
+                      "decisión sobre valores faltantes.",
+            alternatives=["eliminar las filas con valores extremos", "recortarlos hasta un valor límite (winsorización)"],
+            evidence={"criterio": f"se considera extremo un valor fuera de [Q1 - {report['outlier_factor']}·IQR, "
+                                  f"Q3 + {report['outlier_factor']}·IQR] (regla de Tukey)",
                       "valores extremos": sum(i["count"] for i in report["outliers"].values()),
                       "por columna": {c: i["count"] for c, i in report["outliers"].items()}})
-    log.add("D-02", "Variable objetivo", f"escenario «{scenario}»" if scenario else "columna original",
-            rationale=scenario_obj.description if scenario_obj else "",
-            alternatives=[s for s in (sorted(spec.scenarios) if spec.scenarios else []) if s != scenario],
-            evidence={"clases": report["class_counts"]})
+    log.add("D-02", "Variable objetivo",
+            (scenario_obj.goal or f"usar el escenario «{scenario}» como variable objetivo") if scenario
+            else f"predecir la columna «{spec.target}» con sus clases originales",
+            rationale=scenario_obj.description if scenario_obj
+            else "Las clases originales ya sirven para el problema, así que no hace falta agruparlas ni transformarlas.",
+            alternatives=[f"usar el escenario «{s}»" for s in (sorted(spec.scenarios) if spec.scenarios else []) if s != scenario],
+            evidence={"casos por clase": report["class_counts"]})
     return Dataset(name=spec.name, X=X, y=y, feature_types=feature_types, target=spec.target, scenario=scenario,
                    class_names=dict(scenario_obj.class_names or {}) if scenario_obj else {}, classes=classes,
-                   log=log, report=report, source=str(source))
+                   log=log, report=report, source=str(source),
+                   descriptions={c: d for c, d in spec.descriptions.items() if c in X.columns})
+
+
+def _label(value, labels: dict):
+    """Reemplaza un código por su significado. 4.0 busca la clave 4; un código desconocido o un faltante quedan igual."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return value
+    key = int(value) if isinstance(value, float) and value.is_integer() else value
+    return labels.get(key, value)
 
 
 def load_dataset(path, spec: DatasetSpec, scenario=None, missing_policy="keep", duplicates="keep",

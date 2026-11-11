@@ -80,21 +80,24 @@ def audit(X: pd.DataFrame, y: pd.Series, feature_types: dict, small_class: int =
     warnings = []
     for label, count in class_counts.items():
         if count < small_class:
-            warnings.append(f"Clase {label}: solo {count} casos. Los pliegues estratificados necesitan k <= {count} "
-                            "y las métricas de esa clase van a ser muy ruidosas (agrupar clases o usar menos pliegues).")
+            warnings.append(f"La clase «{label}» tiene solo {count} casos. Por eso, la validación cruzada no puede usar más de "
+                            f"{count} pliegues y las métricas de esa clase van a variar mucho. Conviene agrupar clases o usar menos pliegues.")
     if len(class_counts) > 1:
         ratio = max(class_counts.values()) / max(min(class_counts.values()), 1)
         if ratio > imbalance_ratio:
-            warnings.append(f"Desbalance de clases {ratio:.1f}:1. Usar macro-F1 y accuracy balanceada, no solo accuracy.")
+            warnings.append(f"Las clases están desbalanceadas: la más frecuente tiene {ratio:.1f} veces más casos que la menos frecuente. "
+                            "En estos casos conviene mirar el F1 macro y la exactitud balanceada, y no solo la exactitud.")
     for column, info in missing.items():
         if info["count"] / n > high_missing:
-            warnings.append(f"{column}: {info['pct']}% de faltantes.")
+            warnings.append(f"La columna «{column}» tiene un {info['pct']} % de valores faltantes.")
     if duplicates:
-        warnings.append(f"{duplicates} filas duplicadas: si caen en train y en test las métricas salen infladas.")
+        rows = "Hay 1 fila duplicada" if duplicates == 1 else f"Hay {duplicates} filas duplicadas"
+        warnings.append(f"{rows}. Si una copia queda en el entrenamiento y otra en la prueba, las métricas van a "
+                        "dar mejor de lo que realmente son.")
     if constant:
-        warnings.append(f"Columnas constantes (no aportan): {constant}.")
+        warnings.append(f"Estas columnas tienen siempre el mismo valor, así que no aportan información: {', '.join(map(str, constant))}.")
     if id_like:
-        warnings.append(f"Columnas que parecen un identificador (un valor distinto por fila): {id_like}.")
+        warnings.append(f"Estas columnas parecen identificadores, porque tienen un valor distinto en cada fila: {', '.join(map(str, id_like))}.")
 
     return {
         "n_rows": n, "n_features": X.shape[1], "class_counts": class_counts,

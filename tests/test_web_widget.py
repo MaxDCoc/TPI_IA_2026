@@ -23,7 +23,7 @@ def test_handle_answers_with_the_same_id_and_the_result():
     lab = LabService()
     reply = lab.handle({"id": 7, "method": "datasets", "params": {}})
     assert reply["id"] == 7 and reply["ok"] is True
-    assert [d["key"] for d in reply["result"]["datasets"]][:2] == ["play_tennis", "iris"]
+    assert [d["key"] for d in reply["result"]["datasets"]][:3] == ["heart", "play_tennis", "iris"]
     json.dumps(reply, allow_nan=False)
 
 
@@ -154,8 +154,12 @@ def test_the_dev_server_survives_a_body_that_is_not_json(server):
 
 # --------------------------------------------------------------------- archivos estáticos
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node no está instalado")
-def test_the_javascript_has_valid_module_syntax():
-    result = subprocess.run(["node", "--experimental-default-type=module", "--check", str(STATIC / "app.js")],
+def test_the_javascript_has_valid_module_syntax(tmp_path):
+    # La extensión .mjs fuerza el análisis como módulo ES en cualquier versión de Node
+    # (--experimental-default-type se eliminó en Node 24).
+    module = tmp_path / "app.mjs"
+    shutil.copyfile(STATIC / "app.js", module)
+    result = subprocess.run(["node", "--check", str(module)],
                             capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
 

@@ -72,9 +72,15 @@ Los códigos de `cp`, `restecg`, `slope` y `thal` **no tienen orden**: se declar
 
 Total: 920 filas. Cleveland es el único archivo prácticamente completo.
 
-## Decisiones sobre estos datos
+## Cómo se carga (`src/tp_ia/data/heart.py`)
 
-La fuente, la definición del objetivo (binario o varias clases), el tratamiento de faltantes y los tipos de atributo son decisiones del equipo y se van a registrar con su evidencia en `DECISIONES.md`.
+- **Archivo:** solo `processed.cleveland.data` (303 filas), por el `WARNING` de los autores y por la auditoría de arriba.
+- **Objetivo:** por defecto **binario**: 0 = sin enfermedad (164 casos) y 1 a 4 = con enfermedad (139 casos). Es lo que indica `heart-disease.names`: los experimentos con Cleveland se concentraron en distinguir presencia (1–4) de ausencia (0). También está el escenario `multiclase`, con los cinco valores originales (`load_heart_dataset(scenario="multiclase")`).
+- **Nombres en español:** `age` → `edad`, `sex` → `sexo`, `cp` → `tipo_dolor`, `trestbps` → `presion_reposo`, `chol` → `colesterol`, `fbs` → `glucemia_ayunas`, `restecg` → `ecg_reposo`, `thalach` → `frecuencia_max`, `exang` → `angina_ejercicio`, `oldpeak` → `depresion_st`, `slope` → `pendiente_st`, `ca` → `vasos_coloreados`, `thal` → `talio`, `num` → `diagnostico`.
+- **Códigos traducidos:** los siete atributos nominales muestran su significado en lugar del código (por ejemplo, `tipo_dolor = sin síntomas` en lugar de `cp = 4`), según la tabla de arriba. `vasos_coloreados` queda numérico porque es un conteo.
+- **Faltantes:** se conservan (4 en `vasos_coloreados` y 2 en `talio`), como el resto de los datasets.
+
+Cada una de estas decisiones queda anotada, con su evidencia, en el registro de decisiones del dataset.
 
 ## Otra copia: Kaggle (no se usa como principal)
 

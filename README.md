@@ -11,7 +11,7 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 - [x] Capa de datos agnóstica al dataset: cargador, auditoría y registro de decisiones (D-01 a D-07). Probada sobre Iris.
 - [x] Random Forest, métricas y corredor de experimentos. Probados sobre Iris.
 - [x] Experimentos: barrido de un parámetro, validación cruzada anidada y robustez a faltantes. Probados sobre Iris.
-- [ ] Heart Disease: verificar el cargador y los escenarios, una vez confirmado todo con Iris.
+- [x] Heart Disease: cargador de `processed.cleveland.data` con objetivo binario (y escenario de cinco clases), en `src/tp_ia/data/heart.py`.
 - [x] Interfaz web con anywidget (datos, árbol, comparación y laboratorio de parámetros). Probada en el navegador; **falta probarla dentro de Colab**.
 - [x] Poda por error pesimista de C4.5 (`prune=True`). Probada sobre Iris.
 - [ ] Notebook final e informe.
@@ -153,10 +153,10 @@ O dentro de un notebook local: `from tp_ia.web.widget import show; show()`.
 
 | Pestaña | Qué hace |
 |---|---|
-| Datos | Elegir Play Tennis, Iris, Wine o Breast Cancer (o subir un CSV); ver atributos, calidad de los datos y las decisiones D-01 a D-07. |
+| Datos | Ver el dataset elegido arriba a la derecha (Enfermedad cardíaca, Play Tennis, Iris, Wine o Breast Cancer) o subir un CSV; atributos, calidad de los datos y las decisiones D-01 a D-06 (la D-07 está en Comparar). |
 | Árbol | El árbol de C4.5 dibujado como flujo de casos (el ancho de cada rama es la cantidad de casos, apilada por clase). Los parámetros se mueven en vivo, incluida la poda. Se puede predecir un caso, incluso con datos faltantes, y ver por dónde pasa. |
 | Comparar | Árbol propio contra Random Forest sobre las mismas particiones: media, desvío, brecha de sobreajuste y Wilcoxon descriptivo. |
-| Laboratorio | Un parámetro por vez y robustez a datos faltantes, con bandas de ±1 desvío. |
+| Experimentos | Un parámetro por vez y robustez a datos faltantes, con bandas de ±1 desvío. |
 
 Los tests no necesitan navegador: `tests/test_web_service.py` prueba toda la lógica y `tests/test_web_widget.py` el widget, el servidor de desarrollo y la sintaxis del JavaScript.
 

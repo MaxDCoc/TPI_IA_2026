@@ -34,9 +34,9 @@ Es el dataset con el que se construye y se prueba todo primero. Cuando el pipeli
 
 ## Archivos incluidos en `data/uci_heart/`
 
-`processed.cleveland.data`, `processed.hungarian.data`, `processed.switzerland.data`, `processed.va.data`, `heart-disease.names` (documentación) y `WARNING`.
+El contenido completo del zip de UCI, que se puede redistribuir citando la fuente (CC BY 4.0): los cuatro archivos procesados (`processed.cleveland.data`, `processed.hungarian.data`, `processed.switzerland.data`, `processed.va.data`), los archivos originales (`cleveland.data`, `hungarian.data`, `switzerland.data`, `long-beach-va.data`, `new.data`, `reprocessed.hungarian.data`, `cleve.mod`, `bak`, `Index`, `ask-detrano` y la carpeta `costs/`), `heart-disease.names` (documentación) y `WARNING`. El trabajo usa solo `processed.cleveland.data`; el resto queda como material de consulta.
 
-No se versionan el zip ni los archivos crudos (`cleveland.data`, etc.). El `WARNING` de los autores indica que el crudo `cleveland.data` quedó dañado y que `processed.cleveland.data` es utilizable para la situación de 14 atributos.
+No se versiona el archivo zip. El `WARNING` de los autores indica que el crudo `cleveland.data` quedó dañado y que `processed.cleveland.data` es utilizable para la situación de 14 atributos.
 
 ## Formato
 

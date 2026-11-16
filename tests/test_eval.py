@@ -187,9 +187,10 @@ def test_the_evaluation_decision_is_registered_once_and_reflects_the_splits():
     assert len(d07) == 1                           # reemplaza, no duplica
     assert "3 pliegues" in d07[0].chosen and "repetida 2 veces" in d07[0].chosen
     sizes = lambda attr: sorted({len(getattr(s, attr)) for s in splits})
+    span = lambda xs: f"{xs[0]}" if xs[0] == xs[-1] else f"entre {xs[0]} y {xs[-1]}"
     assert d07[0].evidence["particiones"] == 6 and d07[0].evidence["repeticiones"] == 2
-    assert d07[0].evidence["casos de test"] == f"{sizes('test')[0]}-{sizes('test')[-1]}"
-    assert d07[0].evidence["casos de train"] == f"{sizes('train')[0]}-{sizes('train')[-1]}"
+    assert d07[0].evidence["casos de prueba por partición"] == span(sizes("test"))
+    assert d07[0].evidence["casos de entrenamiento por partición"] == span(sizes("train"))
     assert set(d07[0].evidence["modelos"]) == {"DT", "RF"}          # queda la última evaluación
 
 
@@ -198,8 +199,8 @@ def test_the_evaluation_decision_describes_a_holdout_and_can_be_skipped():
     holdout = make_splits(ds.y, scheme="holdout", n_repeats=4, test_size=0.3)
     run_experiment(ds, {"DT": ("dt", {"max_depth": 2})}, holdout)
     d07 = next(d for d in ds.log if d.id == "D-07")
-    assert d07.chosen.startswith("partición train/test estratificada") and d07.evidence["pliegues por repetición"] == 1
-    assert "max_depth" in d07.evidence["modelos"]["DT"]
+    assert d07.chosen.startswith("evaluar con una división estratificada en entrenamiento y prueba") and d07.evidence["pliegues por repetición"] == 1
+    assert "profundidad máxima: 2" in d07.evidence["modelos"]["DT"]
     other = load_iris_dataset()
     run_experiment(other, {"DT": ("dt", {})}, holdout, register_decision=False)
     assert "D-07" not in other.log.ids()

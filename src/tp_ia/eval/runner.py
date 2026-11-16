@@ -42,6 +42,23 @@ def _align_proba(proba, model_classes, classes) -> np.ndarray:
     return out
 
 
+PARAM_NAMES = {"criterion": "criterio", "max_depth": "profundidad máxima", "min_samples_leaf": "mínimo de casos por hoja",
+               "min_samples_split": "mínimo de casos para dividir", "min_gain": "ganancia mínima",
+               "use_avg_gain": "heurística de ganancia promedio", "threshold_mode": "umbral numérico",
+               "numeric_gain_correction": "corrección de la versión 8", "prune": "poda", "confidence": "confianza de la poda",
+               "n_estimators": "cantidad de árboles", "random_state": "semilla"}
+PARAM_VALUES = {None: "sin límite", True: "sí", False: "no", "gain_ratio": "razón de ganancia",
+                "gain": "ganancia de información", "c45": "valor observado", "midpoint": "punto medio"}
+
+
+def _param_text(key, value) -> str:
+    """('max_depth', None) -> 'profundidad máxima: sin límite', como se lee en la interfaz."""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    shown = PARAM_VALUES.get(value, value) if isinstance(value, (str, bool, type(None))) else value
+    return f"{PARAM_NAMES.get(key, key)}: {shown}"
+
+
 def register_evaluation(dataset, splits, models: dict):
     """Anota en el registro de decisiones del dataset cómo se evalúa (D-07).
 
@@ -53,22 +70,26 @@ def register_evaluation(dataset, splits, models: dict):
     folds = len(splits) // repeats
     train, test = [len(s.train) for s in splits], [len(s.test) for s in splits]
     if folds > 1:
-        chosen = f"validación cruzada estratificada de {folds} pliegues, repetida {repeats} veces ({len(splits)} particiones)"
+        chosen = f"evaluar con validación cruzada estratificada de {folds} pliegues, repetida {repeats} veces ({len(splits)} particiones en total)"
     else:
-        chosen = f"partición train/test estratificada, repetida {repeats} veces ({len(splits)} particiones)"
+        chosen = f"evaluar con una división estratificada en entrenamiento y prueba, repetida {repeats} veces ({len(splits)} particiones en total)"
+    span = lambda sizes: f"{min(sizes)}" if min(sizes) == max(sizes) else f"entre {min(sizes)} y {max(sizes)}"
+    names = {"dt": "árbol propio C4.5", "rf": "Random Forest de scikit-learn"}
+    describe = lambda kind, params: (f"{names.get(kind, kind)}, con " + ", ".join(_param_text(k, v) for k, v in params.items())
+                                     if params else f"{names.get(kind, kind)}, con los parámetros por defecto")
     return dataset.log.replace(
         "D-07", "Esquema de evaluación", chosen,
-        rationale="Con pocos datos una sola partición es ruido: un error de más mueve la accuracy varios puntos. "
-                  "Se estratifica para conservar la proporción de clases y los modelos se evalúan sobre las MISMAS "
-                  "particiones, así la comparación es sobre los mismos datos. Se informan accuracy, balanced accuracy y "
-                  "macro-F1 (con clases desbalanceadas la accuracy engaña) y train contra test, para ver el sobreajuste. "
-                  "Las particiones de una validación cruzada se solapan: el p-valor de Wilcoxon es descriptivo, no "
-                  "una prueba formal.",
-        alternatives=["una sola partición train/test", "validación cruzada sin repetir"],
+        rationale="Con pocos datos, una sola partición da resultados poco confiables: un error más o menos cambia la "
+                  "exactitud en varios puntos. Por eso se repite la validación cruzada. Además, se estratifica para "
+                  "mantener la proporción de clases en cada partición, y los dos modelos se evalúan sobre las mismas "
+                  "particiones para que la comparación sea justa. Se informan la exactitud, la exactitud balanceada y el "
+                  "F1 macro, porque con clases desbalanceadas la exactitud sola puede engañar. También se compara el "
+                  "entrenamiento con la prueba para detectar sobreajuste. Como las particiones comparten datos entre sí, "
+                  "el valor p de la prueba de Wilcoxon es solo orientativo.",
+        alternatives=["usar una sola división en entrenamiento y prueba", "usar validación cruzada sin repeticiones"],
         evidence={"particiones": len(splits), "repeticiones": repeats, "pliegues por repetición": folds,
-                  "casos de train": f"{min(train)}-{max(train)}", "casos de test": f"{min(test)}-{max(test)}",
-                  "modelos": {name: f"{kind} {params or '(parámetros por defecto)'}"
-                              for name, (kind, params) in models.items()}})
+                  "casos de entrenamiento por partición": span(train), "casos de prueba por partición": span(test),
+                  "modelos": {name: describe(kind, params) for name, (kind, params) in models.items()}})
 
 
 def run_experiment(dataset, models: dict, splits, register_decision: bool = True) -> pd.DataFrame:

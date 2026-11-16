@@ -12,7 +12,8 @@ así que se puede probar con pytest sin abrir ningún navegador.
     permitido y limpia el resultado para JSON. Un método que no está en la lista no se ejecuta.
   - El árbol de la pestaña "Árbol" se entrena con una partición estratificada train/test (por defecto 30 % de test;
     Play Tennis usa todos los casos, como en el libro). La pestaña "Comparar" usa validación cruzada repetida.
-  - Los datasets se registran con register_dataset(): así se puede sumar Heart Disease o un CSV subido sin tocar nada más.
+  - Los datasets se registran con register_dataset(): así se puede sumar otro dataset o un CSV subido sin tocar nada más.
+    El primero de default_entries() es el primero de la lista desplegable de la interfaz.
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ import numpy as np
 import pandas as pd
 
 from ..c45 import C45DecisionTree
-from ..data import load_iris_dataset
+from ..data import load_heart_dataset, load_iris_dataset
 from ..data.fixtures import play_tennis
 from ..data.loader import Dataset, build_dataset, read_table
 from ..data.schema import DatasetSpec
@@ -98,40 +99,50 @@ def _play_tennis() -> Dataset:
     frame = X.copy()
     frame["Play"] = np.asarray(y)
     spec = DatasetSpec(name="Play Tennis", target="Play", nominal=list(X.columns),
-                       source="Ejemplo clásico de Quinlan (1986), 14 casos con atributos discretos",
+                       source="el ejemplo clásico de Quinlan (1986)",
+                       purpose="Es el ejemplo con el que Quinlan presenta los árboles de decisión. Como tiene solo 14 "
+                               "casos con atributos nominales, permite comparar el árbol obtenido con el del libro.",
                        citation="Quinlan, J. R. (1986). Induction of decision trees. Machine Learning, 1(1), 81-106.")
     return build_dataset(frame, spec, source="Play Tennis")
 
 
-def _sklearn_dataset(title: str, loader, target_label: str, source: str) -> Dataset:
+def _sklearn_dataset(title: str, loader, target_label: str, source: str, purpose: str) -> Dataset:
     bunch = loader(as_frame=True)
     frame = bunch.frame.copy()
     frame[target_label] = [bunch.target_names[int(i)] for i in frame.pop("target")]
-    return build_dataset(frame, DatasetSpec(name=title, target=target_label, source=source), source=title)
+    return build_dataset(frame, DatasetSpec(name=title, target=target_label, source=source, purpose=purpose), source=title)
 
 
 def _wine() -> Dataset:
     from sklearn.datasets import load_wine
     return _sklearn_dataset("Wine", load_wine, "variedad",
-                            "UCI Machine Learning Repository, copia incluida en scikit-learn (load_wine)")
+                            "el UCI Machine Learning Repository, a través de la copia incluida en scikit-learn (load_wine)",
+                            "Tiene más atributos que Iris (13 medidas químicas), así que sirve para ver cómo se comportan "
+                            "los dos modelos cuando tienen más información disponible.")
 
 
 def _breast_cancer() -> Dataset:
     from sklearn.datasets import load_breast_cancer
     return _sklearn_dataset("Breast Cancer Wisconsin", load_breast_cancer, "diagnóstico",
-                            "UCI Machine Learning Repository, copia incluida en scikit-learn (load_breast_cancer)")
+                            "el UCI Machine Learning Repository, a través de la copia incluida en scikit-learn (load_breast_cancer)",
+                            "Es un problema real, con 30 atributos numéricos y dos clases de distinto tamaño, así que "
+                            "sirve para probar los modelos en un caso más exigente.")
 
 
 def default_entries() -> list:
     return [
-        DatasetEntry("play_tennis", "Play Tennis", "14 casos con atributos discretos: el ejemplo del libro de Quinlan.",
+        DatasetEntry("heart", "Enfermedad cardíaca", "303 pacientes de la Cleveland Clinic, descritos con 13 atributos "
+                     "clínicos. Se predice si tienen o no una enfermedad cardíaca.",
+                     load_heart_dataset, "Janosi y otros (1989), UCI",
+                     disclaimer="Esta es una herramienta educativa. Sus resultados no constituyen un diagnóstico médico."),
+        DatasetEntry("play_tennis", "Play Tennis", "14 días descritos por el clima. Es el ejemplo clásico del libro de Quinlan.",
                      _play_tennis, "Quinlan (1986)", default_test_size=0.0),
-        DatasetEntry("iris", "Iris", "150 flores, 4 medidas numéricas y 3 especies: el dataset de desarrollo.",
+        DatasetEntry("iris", "Iris", "150 flores de 3 especies, descritas con 4 medidas numéricas. Es el dataset principal de desarrollo.",
                      load_iris_dataset, "Fisher (1936)"),
-        DatasetEntry("wine", "Wine", "178 vinos, 13 atributos químicos y 3 variedades.", _wine, "UCI vía scikit-learn"),
-        DatasetEntry("breast_cancer", "Breast Cancer Wisconsin", "569 casos, 30 medidas numéricas y 2 diagnósticos.",
+        DatasetEntry("wine", "Wine", "178 vinos de 3 variedades, descritos con 13 atributos químicos.", _wine, "UCI vía scikit-learn"),
+        DatasetEntry("breast_cancer", "Breast Cancer Wisconsin", "569 casos con 30 medidas numéricas, clasificados en 2 diagnósticos.",
                      _breast_cancer, "UCI vía scikit-learn",
-                     disclaimer="Herramienta educativa: no es un diagnóstico médico."),
+                     disclaimer="Esta es una herramienta educativa. Sus resultados no constituyen un diagnóstico médico."),
     ]
 
 
@@ -172,7 +183,7 @@ class LabService:
             path = Path(folder) / "datos.csv"
             path.write_text(text, encoding="utf-8")
             frame = read_table(path)
-        spec = DatasetSpec(name=name, target=target, nominal=list(nominal), source="Archivo subido por el usuario")
+        spec = DatasetSpec(name=name, target=target, nominal=list(nominal), source="un archivo CSV que cargó el usuario")
         entry = DatasetEntry("subido", name, "Archivo subido por el usuario.",
                              lambda: build_dataset(frame, spec, source=name))
         self.register_dataset(entry)
@@ -229,7 +240,8 @@ class LabService:
         out = []
         for column in ds.X.columns:
             series, kind = ds.X[column], ds.feature_types[column]
-            item = {"name": str(column), "kind": kind, "missing": int(series.isna().sum())}
+            item = {"name": str(column), "kind": kind, "missing": int(series.isna().sum()),
+                    "description": ds.descriptions.get(str(column), "")}
             if kind == "numeric":
                 values = pd.to_numeric(series, errors="coerce").dropna()
                 edges = np.histogram_bin_edges(values, bins=12)
@@ -245,8 +257,10 @@ class LabService:
             else:
                 counts = series.dropna().map(_tidy).value_counts()
                 values = sorted(counts.index, key=str)
+                tidy = series.map(lambda v: None if pd.isna(v) else _tidy(v))
+                by_class = {str(v): [int(((tidy == v) & (ds.y == c)).sum()) for c in ds.classes] for v in values}
                 item.update(values=[_tidy(v) for v in values], counts={str(_tidy(v)): int(counts[v]) for v in values},
-                            default=_tidy(counts.index[0]) if len(counts) else None)
+                            by_class=by_class, default=_tidy(counts.index[0]) if len(counts) else None)
             out.append(item)
         return out
 

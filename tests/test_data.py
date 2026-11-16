@@ -46,14 +46,16 @@ def test_iris_loads_from_csv_with_expected_shape_and_types():
     assert set(ds.feature_types.values()) == {"numeric"}
     assert ds.report["missing"] == {} and ds.report["rows_with_missing"] == 0
     assert ds.report["duplicates"] == 1
-    assert any("duplicadas" in w for w in ds.report["warnings"])
+    assert any(w.startswith("Hay 1 fila duplicada.") for w in ds.report["warnings"])
 
 
 def test_iris_records_every_decision_with_evidence():
     ds = load_iris_dataset()
     assert {"D-01", "D-02", "D-03", "D-04", "D-05", "D-06"} <= set(ds.log.ids())
     markdown = ds.log.to_markdown()
-    assert "D-04" in markdown and "duplicadas = 1" in markdown
+    assert "(código D-04)" in markdown and "- Filas duplicadas: 1" in markdown
+    assert "## Primera decisión: usar el dataset «Iris» (archivo iris.csv)" in markdown
+    assert "**Por qué:** Es un conjunto de datos clásico" in markdown and "{" not in markdown   # sin dicts crudos
     assert len(ds.log.to_records()) == len(ds.log)
     assert ds.summary()["n_rows"] == 150
 
@@ -122,7 +124,7 @@ def test_audit_flags_small_classes_imbalance_duplicates_constant_and_id_columns(
     assert report["constant_columns"] == ["const"] and report["id_like_columns"] == ["id"]
     assert report["duplicates"] == 0
     text = " ".join(report["warnings"])
-    assert "Clase b" in text and "Desbalance" in text
+    assert "La clase «b»" in text and "desbalanceadas" in text
 
     repeated = pd.concat([base, base.iloc[[3]]], ignore_index=True)
     y_repeated = pd.concat([y, y.iloc[[3]]], ignore_index=True)
@@ -131,10 +133,19 @@ def test_audit_flags_small_classes_imbalance_duplicates_constant_and_id_columns(
 
 def test_decision_log_markdown_and_records():
     log = DecisionLog()
-    log.add("D-09", "Prueba", "A", rationale="porque sí", alternatives=["B"], evidence={"n": 3})
+    log.add("D-09", "Prueba", "elegir A", rationale="Porque sí.", alternatives=["elegir B", "elegir C", "elegir D"],
+            evidence={"casos": 3, "por clase": {"x": 1, "y": 2}, "columnas": []})
     markdown = log.to_markdown()
-    assert "D-09 · Prueba" in markdown and "n = 3" in markdown and "B" in markdown
+    assert "## Primera decisión: elegir A" in markdown and "*Tema: Prueba (código D-09)*" in markdown
+    assert "**Otras opciones posibles:** elegir B, elegir C o elegir D." in markdown
+    assert "- Casos: 3" in markdown and "- Por clase: x: 1, y: 2" in markdown and "- Columnas: ninguno" in markdown
     assert log.to_records()[0]["id"] == "D-09" and len(log) == 1
+
+
+def test_decisions_are_numbered_in_words():
+    from tp_ia.data.decisions import decision_label
+    assert [decision_label(n) for n in (1, 2, 7, 10)] == ["Primera decisión", "Segunda decisión", "Séptima decisión", "Décima decisión"]
+    assert decision_label(13) == "Decisión n.º 13"
 
 
 def test_decision_log_is_listed_in_numeric_order_and_replace_does_not_duplicate():
@@ -142,14 +153,14 @@ def test_decision_log_is_listed_in_numeric_order_and_replace_does_not_duplicate(
     for decision_id in ("D-05", "D-01", "D-03", "D-02"):
         log.add(decision_id, "t", "c")
     log.add("D-03", "segunda de las faltantes", "c")          # un mismo id puede registrarse dos veces
-    assert re.findall(r"## (D-\d\d)", log.to_markdown()) == ["D-01", "D-02", "D-03", "D-03", "D-05"]
+    assert re.findall(r"\(código (D-\d\d)\)", log.to_markdown()) == ["D-01", "D-02", "D-03", "D-03", "D-05"]
     assert [r["title"] for r in log.to_records() if r["id"] == "D-03"] == ["t", "segunda de las faltantes"]
     log.replace("D-03", "única", "c")
     assert log.ids().count("D-03") == 1 and len(log) == 4
 
 
 def test_the_iris_decision_report_reads_in_order():
-    headings = re.findall(r"## (D-\d\d)", load_iris_dataset().log.to_markdown())
+    headings = re.findall(r"\(código (D-\d\d)\)", load_iris_dataset().log.to_markdown())
     assert headings == sorted(headings) and headings[0] == "D-01" and "D-06" in headings
 
 
@@ -176,6 +187,6 @@ def test_iris_outliers_match_an_independent_numpy_computation_and_are_kept():
     assert expected == {"sepal_width": 4}                          # 2.0, 4.1, 4.2 y 4.4
     assert {c: i["count"] for c, i in ds.report["outliers"].items()} == expected
     d06 = next(d for d in ds.log if d.id == "D-06")
-    assert d06.chosen == "se conservan" and d06.evidence["valores extremos"] == 4
+    assert d06.chosen == "conservar los valores extremos" and d06.evidence["valores extremos"] == 4
     assert len(ds.X) == 150 and ds.X["sepal_width"].max() == 4.4   # no se borró ni se recortó nada
     assert not any("extremo" in w for w in ds.report["warnings"])  # informa, no alarma

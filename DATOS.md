@@ -34,9 +34,9 @@ Es el dataset con el que se construye y se prueba todo primero. Cuando el pipeli
 
 ## Archivos incluidos en `data/uci_heart/`
 
-`processed.cleveland.data`, `processed.hungarian.data`, `processed.switzerland.data`, `processed.va.data`, `heart-disease.names` (documentación) y `WARNING`.
+El contenido completo del zip de UCI, que se puede redistribuir citando la fuente (CC BY 4.0): los cuatro archivos procesados (`processed.cleveland.data`, `processed.hungarian.data`, `processed.switzerland.data`, `processed.va.data`), los archivos originales (`cleveland.data`, `hungarian.data`, `switzerland.data`, `long-beach-va.data`, `new.data`, `reprocessed.hungarian.data`, `cleve.mod`, `bak`, `Index`, `ask-detrano` y la carpeta `costs/`), `heart-disease.names` (documentación) y `WARNING`. El trabajo usa solo `processed.cleveland.data`; el resto queda como material de consulta.
 
-No se versionan el zip ni los archivos crudos (`cleveland.data`, etc.). El `WARNING` de los autores indica que el crudo `cleveland.data` quedó dañado y que `processed.cleveland.data` es utilizable para la situación de 14 atributos.
+No se versiona el archivo zip. El `WARNING` de los autores indica que el crudo `cleveland.data` quedó dañado y que `processed.cleveland.data` es utilizable para la situación de 14 atributos.
 
 ## Formato
 
@@ -72,9 +72,15 @@ Los códigos de `cp`, `restecg`, `slope` y `thal` **no tienen orden**: se declar
 
 Total: 920 filas. Cleveland es el único archivo prácticamente completo.
 
-## Decisiones sobre estos datos
+## Cómo se carga (`src/tp_ia/data/heart.py`)
 
-La fuente, la definición del objetivo (binario o varias clases), el tratamiento de faltantes y los tipos de atributo son decisiones del equipo y se van a registrar con su evidencia en `DECISIONES.md`.
+- **Archivo:** solo `processed.cleveland.data` (303 filas), por el `WARNING` de los autores y por la auditoría de arriba.
+- **Objetivo:** por defecto **binario**: 0 = sin enfermedad (164 casos) y 1 a 4 = con enfermedad (139 casos). Es lo que indica `heart-disease.names`: los experimentos con Cleveland se concentraron en distinguir presencia (1–4) de ausencia (0). También está el escenario `multiclase`, con los cinco valores originales (`load_heart_dataset(scenario="multiclase")`).
+- **Nombres en español:** `age` → `edad`, `sex` → `sexo`, `cp` → `tipo_dolor`, `trestbps` → `presion_reposo`, `chol` → `colesterol`, `fbs` → `glucemia_ayunas`, `restecg` → `ecg_reposo`, `thalach` → `frecuencia_max`, `exang` → `angina_ejercicio`, `oldpeak` → `depresion_st`, `slope` → `pendiente_st`, `ca` → `vasos_coloreados`, `thal` → `talio`, `num` → `diagnostico`.
+- **Códigos traducidos:** los siete atributos nominales muestran su significado en lugar del código (por ejemplo, `tipo_dolor = sin síntomas` en lugar de `cp = 4`), según la tabla de arriba. `vasos_coloreados` queda numérico porque es un conteo.
+- **Faltantes:** se conservan (4 en `vasos_coloreados` y 2 en `talio`), como el resto de los datasets.
+
+Cada una de estas decisiones queda anotada, con su evidencia, en el registro de decisiones del dataset.
 
 ## Otra copia: Kaggle (no se usa como principal)
 

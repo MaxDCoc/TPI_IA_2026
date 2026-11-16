@@ -6,7 +6,7 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# Datos crudos descargados (en data/uci_heart/ solo se versionan los archivos procesados)
+# Descargas sueltas (el contenido de data/uci_heart/ sí se versiona: ver DATOS.md)
 data/raw/
 *.zip
 

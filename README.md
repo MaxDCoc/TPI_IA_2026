@@ -11,22 +11,24 @@ El árbol no usa ninguna librería de árboles de decisión: todo está en `src/
 - [x] Capa de datos agnóstica al dataset: cargador, auditoría y registro de decisiones (D-01 a D-07). Probada sobre Iris.
 - [x] Random Forest, métricas y corredor de experimentos. Probados sobre Iris.
 - [x] Experimentos: barrido de un parámetro, validación cruzada anidada y robustez a faltantes. Probados sobre Iris.
-- [ ] Heart Disease: verificar el cargador y los escenarios, una vez confirmado todo con Iris.
-- [x] Interfaz web con anywidget (datos, árbol, comparación y laboratorio de parámetros). Probada en el navegador; **falta probarla dentro de Colab**.
+- [x] Heart Disease: cargador de `processed.cleveland.data` con objetivo binario (y escenario de cinco clases), en `src/tp_ia/data/heart.py`.
+- [x] Interfaz web con anywidget (datos, árbol, comparación y experimentos). Probada en el navegador y dentro de Colab (16/11/2026), con Heart Disease como dataset inicial.
 - [x] Poda por error pesimista de C4.5 (`prune=True`). Probada sobre Iris.
-- [ ] Notebook final e informe.
+- [x] Notebook para Colab **autocontenido**: lleva adentro todo el código y los datos, y con subir ese único archivo alcanza (interfaz, árbol desde código, dibujo con Graphviz y pruebas automáticas). Probado en Colab con solo el archivo.
+- El informe LNCS se entrega aparte: no está en este repositorio.
 
 ## Estructura
 
 ```
 src/tp_ia/c45/     el árbol: criteria.py (entropía, ganancia) · splits.py (mejor corte) · tree.py
-src/tp_ia/data/    cargador agnóstico, auditoría, registro de decisiones, Iris y fixtures de juguete (Play Tennis, Liu)
+src/tp_ia/data/    cargador agnóstico, auditoría, registro de decisiones, Heart Disease, Iris y fixtures de juguete (Play Tennis, Liu)
 src/tp_ia/eval/    particiones, métricas, Random Forest (scikit-learn), corredor y experimentos
 src/tp_ia/web/     interfaz web: servicio en Python, widget de anywidget y la interfaz (JavaScript y CSS)
-notebooks/         laboratorio_arboles_c45.ipynb: el notebook para Colab
+notebooks/         laboratorio_arboles_c45.ipynb: el notebook para Colab, autocontenido (es el entregable)
+scripts/           build_colab_notebook.py arma ese notebook a partir de los archivos del repositorio
 tests/             pytest
 data/iris/         iris.csv: dataset de desarrollo y validación (ver DATOS.md)
-data/uci_heart/    archivos procesados de UCI (ver DATOS.md)
+data/uci_heart/    archivos de UCI Heart Disease; se usa processed.cleveland.data (ver DATOS.md)
 DATOS.md           fuente, cita, licencia, columnas y auditoría de los datos
 ```
 
@@ -140,7 +142,7 @@ En la selección anidada, ante un empate gana la primera combinación de la gril
 
 El laboratorio es un widget de [anywidget](https://anywidget.dev/). La interfaz está escrita en JavaScript y CSS propios (`src/tp_ia/web/static/`), sin librerías externas, y todo el cálculo se hace en Python (`src/tp_ia/web/service.py`). Las dos partes se hablan con mensajes `{id, method, params}`.
 
-**En Colab:** abrí [notebooks/laboratorio_arboles_c45.ipynb](notebooks/laboratorio_arboles_c45.ipynb) (desde Colab: *Archivo → Abrir cuaderno → GitHub*) y ejecutá las celdas en orden. La primera clona el repositorio e instala `anywidget`.
+**En Colab:** el notebook [notebooks/laboratorio_arboles_c45.ipynb](notebooks/laboratorio_arboles_c45.ipynb) es **autocontenido**: lleva adentro todo el código del programa y los datos, así que se entrega solo ese archivo. Se abre en Colab con *Archivo → Subir cuaderno* y se ejecuta con *Entorno de ejecución → Ejecutar todas*. No clona ni descarga ningún repositorio: lo único que instala es `anywidget`, con `pip`.
 
 **En tu máquina:**
 
@@ -153,13 +155,24 @@ O dentro de un notebook local: `from tp_ia.web.widget import show; show()`.
 
 | Pestaña | Qué hace |
 |---|---|
-| Datos | Elegir Play Tennis, Iris, Wine o Breast Cancer (o subir un CSV); ver atributos, calidad de los datos y las decisiones D-01 a D-07. |
+| Datos | Ver el dataset elegido arriba a la derecha (Enfermedad cardíaca, Play Tennis, Iris, Wine o Breast Cancer) o subir un CSV; atributos, calidad de los datos y las decisiones D-01 a D-06 (la D-07 está en Comparar). |
 | Árbol | El árbol de C4.5 dibujado como flujo de casos (el ancho de cada rama es la cantidad de casos, apilada por clase). Los parámetros se mueven en vivo, incluida la poda. Se puede predecir un caso, incluso con datos faltantes, y ver por dónde pasa. |
 | Comparar | Árbol propio contra Random Forest sobre las mismas particiones: media, desvío, brecha de sobreajuste y Wilcoxon descriptivo. |
-| Laboratorio | Un parámetro por vez y robustez a datos faltantes, con bandas de ±1 desvío. |
+| Experimentos | Un parámetro por vez y robustez a datos faltantes, con bandas de ±1 desvío. |
 
 Los tests no necesitan navegador: `tests/test_web_service.py` prueba toda la lógica y `tests/test_web_widget.py` el widget, el servidor de desarrollo y la sintaxis del JavaScript.
 
+### Regenerar el notebook
+
+El notebook **se genera**: no se edita a mano. Si se cambia algo en `src/`, en `tests/` o en los datos, hay que regenerarlo:
+
+```bash
+python scripts/build_colab_notebook.py          # escribe notebooks/laboratorio_arboles_c45.ipynb
+python scripts/build_colab_notebook.py --check  # falla si el notebook quedó desactualizado
+```
+
+`tests/test_notebook.py` comprueba que el notebook esté al día, que no consulte ningún repositorio y que funcione ejecutado desde una carpeta vacía.
+
 ## Datos
 
-Ver [DATOS.md](DATOS.md). Iris (Fisher, 1936) se usa para desarrollar y validar el pipeline. El dataset de análisis es UCI Machine Learning Repository, *Heart Disease*, licencia CC BY 4.0, y se usa después de confirmar todo con Iris.
+Ver [DATOS.md](DATOS.md). Iris (Fisher, 1936) se usó para desarrollar y validar el pipeline. El dataset de análisis es UCI Machine Learning Repository, *Heart Disease*, licencia CC BY 4.0, y es el que la interfaz muestra al iniciar.

@@ -19,8 +19,10 @@ CITATION = ("Fisher, R. A. (1936). The use of multiple measurements in taxonomic
 
 IRIS_SPEC = DatasetSpec(
     name="Iris", target="species",
-    source="Copia incluida en scikit-learn (datasets.load_iris), guardada como CSV en data/iris/",
-    citation=CITATION)
+    source="la copia que viene incluida en scikit-learn (datasets.load_iris), guardada como CSV en la carpeta data/iris/",
+    citation=CITATION,
+    purpose="Es un conjunto de datos clásico y pequeño, con tres clases bien diferenciadas. Por eso es ideal para "
+            "desarrollar el algoritmo y comparar el árbol con el bosque sin que los tiempos de cálculo sean un problema.")
 
 
 def default_data_dir() -> Path:

@@ -53,7 +53,7 @@ def test_unknown_methods_unknown_datasets_and_missing_selection_are_rejected(lab
 # --------------------------------------------------------------------- datasets
 def test_the_catalog_lists_every_included_dataset(lab):
     keys = [d["key"] for d in lab.call("datasets")["datasets"]]
-    assert keys == ["play_tennis", "iris", "wine", "breast_cancer"]
+    assert keys == ["heart", "play_tennis", "iris", "wine", "breast_cancer"]      # enfermedad cardíaca, primero
     assert all(d["title"] and d["description"] for d in lab.call("datasets")["datasets"])
 
 
@@ -218,4 +218,4 @@ def test_decisions_are_available_as_records_and_markdown(iris):
     iris.compare(rf_params={"n_estimators": 5}, n_splits=3, n_repeats=1)
     out = iris.call("decisions")
     ids = [d["id"] for d in out["records"]]
-    assert ids == sorted(ids) and "D-07" in ids and "## D-06" in out["markdown"]
+    assert ids == sorted(ids) and "D-07" in ids and "(código D-06)" in out["markdown"]

@@ -22,12 +22,14 @@ class Scenario:
 
     mapping:      valor original -> clase nueva (None = se deja la columna como viene).
     class_names:  clase nueva -> nombre legible para tablas y gráficos.
+    goal:         qué se predice, como acción ("predecir si ..."); es el título de la decisión en el registro.
     """
 
     name: str
     mapping: dict | None = None
     class_names: dict | None = None
     description: str = ""
+    goal: str = ""
 
 
 @dataclass
@@ -41,5 +43,8 @@ class DatasetSpec:
     drop: list = field(default_factory=list)      # columnas a descartar (IDs, nombres, ...)
     missing_tokens: tuple = DEFAULT_MISSING_TOKENS
     scenarios: dict = field(default_factory=dict)  # nombre -> Scenario
-    source: str = ""
+    source: str = ""                              # de dónde salen los datos; completa la frase "Los datos provienen de ..."
     citation: str = ""
+    purpose: str = ""                             # por qué se eligió este dataset (aparece en la primera decisión)
+    value_labels: dict = field(default_factory=dict)  # columna -> {código: texto}; por ejemplo {"sexo": {0: "mujer"}}
+    descriptions: dict = field(default_factory=dict)  # columna -> qué mide, en lenguaje sencillo (se ve en la interfaz)
